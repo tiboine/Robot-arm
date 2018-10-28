@@ -2,7 +2,7 @@
 #define rxPin 10
 #define txPin 11 //for software serial
 #include <Servo.h>
-Servo myservo; //servo pos 100-175
+Servo myservo; //servo pos 100-175 100 = open
 #include <SoftwareSerial.h>
 SoftwareSerial mySerial(rxPin, txPin);
 
@@ -13,7 +13,7 @@ const int dirPin2 = 4;
 const int stepPin3 = 7;
 const int dirPin3 = 6;
 int servoPos = 170;
-int stepperArray[3][10] = {{0}};
+int stepperArray[4][10] = {{0}};
 int arrayPin;
 int ledPin = 13;
 
@@ -27,7 +27,8 @@ int xReset;
 int yReset;
 int zReset;
 
-
+int servoButtonOpen = 0;
+int servoButton = 0;
 
 int xSteps;
 int ySteps;
@@ -36,13 +37,8 @@ int xStepSave;
 int yStepSave;
 int zStepSave;
 
-long buttonTimer = 0;
-long longPressTime = 1000;
-bool b6Button = false;
-float pressLength_milliSeconds = 0;
-int optionOne_milliseconds = 100;
-int optionTwo_milliseconds = 1000;
-
+int b6Button = 0;
+int b7Button = 0;
 
 bool saveState = false;
 
@@ -89,8 +85,7 @@ NexTouch *nex_listen_list[] = {
 };
 
 void setup() {
-  myservo.attach(8);
-  myservo.write(175);
+  myservo.attach(9);
   Serial.begin(9600);
   mySerial.begin(9600);
   Serial.println("hardware serial OK");
@@ -104,6 +99,13 @@ void setup() {
   pinMode(dirPin3, OUTPUT);
   pinMode(ledPin, OUTPUT);
 
+  //  myservo.write(100);
+  //  delay(50);
+  //  myservo.write(180);
+  //  delay(50);
+  //  myservo.write(100);
+  //  delay(50);
+
 
   b0.attachPush(b0PushCallback);
   b1.attachPush(b1PushCallback);
@@ -115,7 +117,7 @@ void setup() {
   b7.attachPush(b7PushCallback);
   b8.attachPush(b8PushCallback);
   b9.attachPush(b9PushCallback);
-  //  b10.attachPush(b10PushCallback);
+  b10.attachPush(b10PushCallback);
   b11.attachPush(b11PushCallback);
 
   b0.attachPop(b0PopCallback);
@@ -125,7 +127,7 @@ void setup() {
   b4.attachPop(b4PopCallback);
   b5.attachPop(b5PopCallback);
   b6.attachPop(b6PopCallback);
-  //  b7.attachPop(b7PopCallback);
+  b7.attachPop(b7PopCallback);
   //  b8.attachPop(b8PopCallback);
   //  b9.attachPop(b9PopCallback);
   //  b10.attachPop(b10PopCallback);
@@ -139,32 +141,70 @@ void loop() {
   savePos();
   runSave();
 
-  if (b6Button == true) {
-    pressLength_milliSeconds = pressLength_milliSeconds + 100;
-    delay(100);
-    Serial.println("presslength active");
-  }//long press:
-  if (pressLength_milliSeconds >= optionTwo_milliseconds)
-  {
-    stepperArray[3][10] = {{0}};
-    Serial.println("Memory deleted");
-  }// short press:
-  else if (pressLength_milliSeconds >= optionOne_milliseconds)
-  {
+  //if (servoButtonOpen == 1){
+  //  Serial.println(servoButtonOpen);
+  //
+  //  for (int pos = 170; pos >= 100; pos--) {
+  //    // in steps of 1 degree
+  //    myservo.write(pos);
+  //    delay(5);
+  //  }
+  //  servoButtonOpen = 0;
+  //}
+
+//  if (servoButton == 1) {
+//    Serial.println("1");
+//    for (int pos = 170; pos <= 100; pos--)
+//    {
+//      myservo.write(pos);
+//      delay(5);
+//    }
+//    servoButton++;
+//  }
+//  if (servoButton == 3) {
+//    Serial.println("0");
+//    for (int pos = 100; pos <= 170; pos++)
+//    {
+//      myservo.write(pos);
+//      delay(5);
+//    }
+//    servoButton = 0;
+//  }
+
+if (servoButton == 1) {
+  myservo.write(170);
+  //servoButton = false;
+}
+if (servoButton == 0){
+  myservo.write(100);
+}
+
+
+  if (b6Button >= 1) {
     saveState = true;
-    Serial.println("saving");
+    b6Button++;
+    delay(1);
+    if (b6Button > 1000) {
+      memset(stepperArray, 0, sizeof(stepperArray)); //set the array to 0
+      Serial.println("Save reset");
+      delay(400);
+    }
+  }
+  if (b7Button >= 1) {
+    b7Button++;
+    delay(1);
+    if (b7Button > 1000) {
+      xSteps = 0;
+      ySteps = 0;
+      zSteps = 0;
+      Serial.println(" XYZ steps zeroed");
+      delay(400);
+    }
   }
 
 
-pressLength_milliSeconds = 0;
 }
 
-void servoGrabber() {
-  myservo.write(100);
-  delay(500) ;
-  myservo.write(170);
-  delay(500);
-}
 // SYSTEM INFO            *********************
 void b9PushCallback(void *ptr) {
   systemStatus();
@@ -179,6 +219,8 @@ void systemStatus() {
   Serial.println(ySteps);
   Serial.print("zSteps: ");
   Serial.println(zSteps);
+  Serial.print("servo: ");
+  Serial.println(myservo.read());
   Serial.println("-------------");
   for ( int i = 0; i < 10; i++) {
     Serial.print("stepPin: ");
@@ -186,7 +228,9 @@ void systemStatus() {
     Serial.print("  ");
     Serial.print("StepSave: ");
     Serial.print("  ");
-    Serial.println(stepperArray[1][i]);
+    Serial.print(stepperArray[1][i]);
+    Serial.print(" servo ");
+    Serial.println(stepperArray[3][i]);
   }
   Serial.println("-------------");
 
@@ -213,13 +257,7 @@ void b1PopCallback(void *ptr) {
   Serial.print("xSteps venstre: ");
   Serial.println(xSteps);
 }
-void b11PushCallback(void *ptr) {
-  servoGrabber();
-}
 
-void b11PopCallback(void *ptr) {
-
-}
 
 // STEPPER Y fram/tilbake  *******************
 void b2PushCallback(void *ptr) {
@@ -270,26 +308,47 @@ void b5PopCallback(void *ptr) {
 //SAVE                      ********************
 
 void b6PushCallback(void *ptr) {
-  //    saveState = true;
-  b6Button = true;
+  b6Button++;
 }
 void b6PopCallback(void *ptr) {
-  Serial.println("Save");
-  xReset = zSteps;
-  yReset = zSteps;
+  if (saveState == true) {
+    Serial.println("Save");
+  }
+  xReset = xSteps;
+  yReset = ySteps;
   zReset = zSteps;
-  b6Button = false;
+  b6Button = 0;
 }
 //EXEC RESET                **********************
 void b7PushCallback(void *ptr) {
+
+  b7Button++;
+}
+void b7PopCallback(void *ptr) {
   reset();
+  b7Button = 0;
 }
 //REC
 void b8PushCallback(void *ptr) {
   //resetSave();
   rec = true;
 }
+void b10PushCallback(void *ptr) {
+  //servoButtonOpen++;
+}
 
+void b10PopCallback(void *ptr) {
+  //servoButtonOpen = false;
+}
+void b11PushCallback(void *ptr) {
+  servoButton++;
+  if (servoButton > 1) {
+    servoButton = 0;
+  }
+}
+void b11PopCallback(void *ptr) {
+  //ServoButtonClose = false;
+}
 // SAVE POSITIONS TO ARRAY  ********************
 
 
@@ -299,6 +358,7 @@ void savePos() {
       stepperArray[0][arrayPin] = stepPin1;
       stepperArray[2][arrayPin] = dirPin1;
       stepperArray[1][arrayPin] = xStepSave;
+      stepperArray[3][arrayPin] = myservo.read();
 
       triggerX = false;
       arrayPin++;
@@ -309,6 +369,7 @@ void savePos() {
       stepperArray[0][arrayPin] = stepPin2;
       stepperArray[2][arrayPin] = dirPin2;
       stepperArray[1][arrayPin] = yStepSave;
+      stepperArray[3][arrayPin] = myservo.read();
 
       triggerY = false;
       arrayPin++;
@@ -318,6 +379,7 @@ void savePos() {
       stepperArray[0][arrayPin] = stepPin3;
       stepperArray[2][arrayPin] = dirPin3;
       stepperArray[1][arrayPin] = zStepSave;
+      stepperArray[3][arrayPin] = myservo.read();
 
       triggerZ = false;
       arrayPin++;
@@ -342,6 +404,8 @@ void runSave() {
         Serial.println(stepperArray[1][i]);
       }
       stepper(stepperArray[2][i], stepperArray[1][i], stepperArray[0][i]);
+      myservo.write(stepperArray[4][i]);
+      delay(100);
 
       delay(10);
       if (stepperArray[0][i] == 0) {
@@ -444,10 +508,10 @@ void reset() {
 }
 
 void resetSave() {
-  //  stepper(dirPin3, zStepSave * -1, stepPin3);
-  Serial.print("zReset: ");
+  Serial.println(xReset);
+  Serial.println(yReset);
   Serial.println(zReset);
   stepper(dirPin1, (xSteps - xReset) * -1, stepPin1);
-  stepper(dirPin2, (ySteps - zReset) * -1, stepPin2);
-  stepper(dirPin3, (zSteps - yReset) * -1, stepPin3);
+  stepper(dirPin2, (ySteps - yReset) * -1, stepPin2);
+  stepper(dirPin3, (zSteps - zReset) * -1, stepPin3);
 }
